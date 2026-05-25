@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Jump & Score Game</title>
+    <title>2D Ball Game with Bot</title>
     <style>
         body {
             background-color: #1a1a1a;
@@ -15,99 +15,180 @@
             font-family: sans-serif;
         }
         canvas {
-            background-color: #87CEEB; /* Sky blue */
+            background-color: #87CEEB;
             border: 4px solid #ffffff;
-            border-bottom: 20px solid #2e8b57; /* Thick grass floor */
+            border-bottom: 20px solid #2e8b57;
         }
     </style>
 </head>
 <body>
 
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div>
+        <h2 id="scoreBoard" style="text-align: center; margin-bottom: 10px;">Score: 0 - 0</h2>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // The rules of our world
-        const gravity = 0.6;
-        const groundLevel = 350; // Where the floor is
+        const gravity = 0.4;
+        const groundLevel = 350;
 
-        // Our Player Object
+        let player1Score = 0;
+        let botScore = 0;
+
+        // Player 1 (Red Box) - Controlled by Arrow Keys
         const player = {
-            x: 100,
-            y: groundLevel,
-            width: 40,
-            height: 40,
-            speed: 5,
-            velocityX: 0,
-            velocityY: 0,
-            isJumping: false
+            x: 150, y: groundLevel, width: 40, height: 40,
+            speed: 6, velocityY: 0, isJumping: false
         };
 
-        // Track which keys are being pressed
-        const keys = {
-            ArrowLeft: false,
-            ArrowRight: false,
-            ArrowUp: false
+        // Enemy Bot (Blue Box) - Controlled by AI logic
+        const bot = {
+            x: 600, y: groundLevel, width: 40, height: 40,
+            speed: 4.5, velocityY: 0, isJumping: false
         };
 
-        // Listen for key presses
-        window.addEventListener("keydown", (e) => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-        });
+        const ball = {
+            x: 400, y: 150, radius: 15,
+            velocityX: 3, velocityY: 0,
+            bounce: 0.7
+        };
 
-        // Listen for key releases
-        window.addEventListener("keyup", (e) => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-        });
+        const netWidth = 30;
+        const netHeight = 120;
+        const leftNet = { x: 0, y: canvas.height - netHeight - 20, width: netWidth, height: netHeight };
+        const rightNet = { x: canvas.width - netWidth, y: canvas.height - netHeight - 20, width: netWidth, height: netHeight };
+
+        const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false };
+
+        window.addEventListener("keydown", (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+        window.addEventListener("keyup", (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
 
         function updatePhysics() {
-            // 1. Move Left / Right
+            // --- PLAYER 1 MOVEMENT ---
             if (keys.ArrowLeft) player.x -= player.speed;
             if (keys.ArrowRight) player.x += player.speed;
-
-            // 2. Jump (Only if we are not already jumping)
             if (keys.ArrowUp && !player.isJumping) {
-                player.velocityY = -12; // Massive burst upwards
+                player.velocityY = -10;
                 player.isJumping = true;
             }
-
-            // 3. Apply Gravity
-            player.velocityY += gravity; 
+            player.velocityY += gravity;
             player.y += player.velocityY;
-
-            // 4. Hit the Floor (Stop falling)
-            if (player.y >= groundLevel) {
-                player.y = groundLevel;
-                player.velocityY = 0;
-                player.isJumping = false; // We landed, so we can jump again
-            }
-
-            // Keep player inside the walls
+            if (player.y >= groundLevel) { player.y = groundLevel; player.velocityY = 0; player.isJumping = false; }
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+
+            // --- AI BOT INTELLIGENCE ---
+            // Only move if the ball is past the midfield point line (400px)
+            if (ball.x > 350) {
+                if (bot.x + bot.width/2 < ball.x) {
+                    bot.x += bot.speed; // Move right toward ball
+                } else if (bot.x + bot.width/2 > ball.x) {
+                    bot.x -= bot.speed; // Move left toward ball
+                }
+
+                // If the ball is high up and close, the bot jumps to block it
+                if (ball.y < bot.y && Math.abs(bot.x - ball.x) < 80 && !bot.isJumping) {
+                    bot.velocityY = -10;
+                    bot.isJumping = true;
+                }
+            } else {
+                // Return to defending position if ball is on your side
+                if (bot.x < 600) bot.x += bot.speed;
+                if (bot.x > 600) bot.x -= bot.speed;
+            }
+
+            bot.velocityY += gravity;
+            bot.y += bot.velocityY;
+            if (bot.y >= groundLevel) { bot.y = groundLevel; bot.velocityY = 0; bot.isJumping = false; }
+            if (bot.x < 0) bot.x = 0;
+            if (bot.x + bot.width > canvas.width) bot.x = canvas.width - bot.width;
+
+
+            // --- BALL PHYSICS ---
+            ball.velocityY += gravity * 0.8;
+            ball.x += ball.velocityX;
+            ball.y += ball.velocityY;
+
+            // Bounce Floor
+            if (ball.y + ball.radius >= canvas.height - 20) {
+                ball.y = canvas.height - 20 - ball.radius;
+                ball.velocityY = -ball.velocityY * ball.bounce;
+            }
+            // Bounce Walls
+            if (ball.x - ball.radius <= 0 || ball.x + ball.radius >= canvas.width) {
+                ball.velocityX = -ball.velocityX * ball.bounce;
+            }
+
+
+            // --- COLLISION: Player 1 hits Ball ---
+            if (ball.x + ball.radius > player.x && ball.x - ball.radius < player.x + player.width &&
+                ball.y + ball.radius > player.y && ball.y - ball.radius < player.y + player.height) {
+                ball.velocityX = (ball.x - (player.x + player.width/2)) * 0.4;
+                ball.velocityY = -8;
+            }
+
+            // --- COLLISION: Bot hits Ball ---
+            if (ball.x + ball.radius > bot.x && ball.x - ball.radius < bot.x + bot.width &&
+                ball.y + ball.radius > bot.y && ball.y - ball.radius < bot.y + bot.height) {
+                ball.velocityX = (ball.x - (bot.x + bot.width/2)) * 0.4;
+                ball.velocityY = -8;
+            }
+
+
+            // --- GOAL DETECTION ---
+            if (ball.x < leftNet.x + leftNet.width && ball.y > leftNet.y) {
+                botScore++;
+                resetBall();
+            }
+            if (ball.x > rightNet.x && ball.y > rightNet.y) {
+                player1Score++;
+                resetBall();
+            }
+        }
+
+        function resetBall() {
+            ball.x = 400;
+            ball.y = 150;
+            ball.velocityX = (Math.random() > 0.5 ? 3 : -3);
+            ball.velocityY = 0;
+            document.getElementById("scoreBoard").innerText = `Score: ${player1Score} - ${botScore}`;
         }
 
         function drawScreen() {
-            // Erase the whole screen from the last frame
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw the Player (A red block for now)
-            ctx.fillStyle = "red";
+            // Draw Goals
+            ctx.fillStyle = "white";
+            ctx.fillRect(leftNet.x, leftNet.y, leftNet.width, leftNet.height);
+            ctx.fillRect(rightNet.x, rightNet.y, rightNet.width, rightNet.height);
+
+            // Draw Player 1 (Red)
+            ctx.fillStyle = "#ff4757";
             ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Draw Bot (Blue)
+            ctx.fillStyle = "#2ed573";
+            ctx.fillRect(bot.x, bot.y, bot.width, bot.height);
+
+            // Draw Ball (Orange)
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffa500";
+            ctx.fill();
+            ctx.closePath();
         }
 
-        // The Main Game Loop (Runs 60 times a second)
         function gameLoop() {
             updatePhysics();
             drawScreen();
             requestAnimationFrame(gameLoop);
         }
 
-        // Start the game
         gameLoop();
     </script>
-
 </body>
 </html>
