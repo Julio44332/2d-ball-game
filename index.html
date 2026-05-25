@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jump & Score Game</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: white;
+            font-family: sans-serif;
+        }
+        canvas {
+            background-color: #87CEEB; /* Sky blue */
+            border: 4px solid #ffffff;
+            border-bottom: 20px solid #2e8b57; /* Thick grass floor */
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // The rules of our world
+        const gravity = 0.6;
+        const groundLevel = 350; // Where the floor is
+
+        // Our Player Object
+        const player = {
+            x: 100,
+            y: groundLevel,
+            width: 40,
+            height: 40,
+            speed: 5,
+            velocityX: 0,
+            velocityY: 0,
+            isJumping: false
+        };
+
+        // Track which keys are being pressed
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            ArrowUp: false
+        };
+
+        // Listen for key presses
+        window.addEventListener("keydown", (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+        });
+
+        // Listen for key releases
+        window.addEventListener("keyup", (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+
+        function updatePhysics() {
+            // 1. Move Left / Right
+            if (keys.ArrowLeft) player.x -= player.speed;
+            if (keys.ArrowRight) player.x += player.speed;
+
+            // 2. Jump (Only if we are not already jumping)
+            if (keys.ArrowUp && !player.isJumping) {
+                player.velocityY = -12; // Massive burst upwards
+                player.isJumping = true;
+            }
+
+            // 3. Apply Gravity
+            player.velocityY += gravity; 
+            player.y += player.velocityY;
+
+            // 4. Hit the Floor (Stop falling)
+            if (player.y >= groundLevel) {
+                player.y = groundLevel;
+                player.velocityY = 0;
+                player.isJumping = false; // We landed, so we can jump again
+            }
+
+            // Keep player inside the walls
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+        }
+
+        function drawScreen() {
+            // Erase the whole screen from the last frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the Player (A red block for now)
+            ctx.fillStyle = "red";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        // The Main Game Loop (Runs 60 times a second)
+        function gameLoop() {
+            updatePhysics();
+            drawScreen();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        gameLoop();
+    </script>
+
+</body>
+</html>
