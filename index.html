@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>2D Ball Game with Bot</title>
+    <title>2D Ball Game with Crossbars</title>
     <style>
         body {
             background-color: #1a1a1a;
@@ -38,13 +38,11 @@
         let player1Score = 0;
         let botScore = 0;
 
-        // Player 1 (Red Box) - Controlled by Arrow Keys
         const player = {
             x: 150, y: groundLevel, width: 40, height: 40,
             speed: 6, velocityY: 0, isJumping: false
         };
 
-        // Enemy Bot (Blue Box) - Controlled by AI logic
         const bot = {
             x: 600, y: groundLevel, width: 40, height: 40,
             speed: 4.5, velocityY: 0, isJumping: false
@@ -80,33 +78,24 @@
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-
             // --- AI BOT INTELLIGENCE ---
-            // Only move if the ball is past the midfield point line (400px)
             if (ball.x > 350) {
-                if (bot.x + bot.width/2 < ball.x) {
-                    bot.x += bot.speed; // Move right toward ball
-                } else if (bot.x + bot.width/2 > ball.x) {
-                    bot.x -= bot.speed; // Move left toward ball
-                }
+                if (bot.x + bot.width/2 < ball.x) bot.x += bot.speed;
+                else if (bot.x + bot.width/2 > ball.x) bot.x -= bot.speed;
 
-                // If the ball is high up and close, the bot jumps to block it
                 if (ball.y < bot.y && Math.abs(bot.x - ball.x) < 80 && !bot.isJumping) {
                     bot.velocityY = -10;
                     bot.isJumping = true;
                 }
             } else {
-                // Return to defending position if ball is on your side
                 if (bot.x < 600) bot.x += bot.speed;
                 if (bot.x > 600) bot.x -= bot.speed;
             }
-
             bot.velocityY += gravity;
             bot.y += bot.velocityY;
             if (bot.y >= groundLevel) { bot.y = groundLevel; bot.velocityY = 0; bot.isJumping = false; }
             if (bot.x < 0) bot.x = 0;
             if (bot.x + bot.width > canvas.width) bot.x = canvas.width - bot.width;
-
 
             // --- BALL PHYSICS ---
             ball.velocityY += gravity * 0.8;
@@ -118,11 +107,33 @@
                 ball.y = canvas.height - 20 - ball.radius;
                 ball.velocityY = -ball.velocityY * ball.bounce;
             }
-            // Bounce Walls
-            if (ball.x - ball.radius <= 0 || ball.x + ball.radius >= canvas.width) {
-                ball.velocityX = -ball.velocityX * ball.bounce;
+            // Bounce Top Ceiling
+           if (ball.y - ball.radius <= 0) {
+           ball.y = ball.radius; // Keep ball inside the screen
+           ball.velocityY = -ball.velocityY * ball.bounce; // Reverse speed to bounce down
+           }
+            // Bounce Side Walls (Fixed: Forces the ball out of the wall so it never freezes)
+            if (ball.x - ball.radius <= 0) {
+                ball.x = ball.radius; // Force it out of the left wall
+                ball.velocityX = -ball.velocityX * ball.bounce; // Bounce!
             }
+            if (ball.x + ball.radius >= canvas.width) {
+                ball.x = canvas.width - ball.radius; // Force it out of the right wall
+                ball.velocityX = -ball.velocityX * ball.bounce; // Bounce!
+            }
+            
 
+            // --- SOLID CROSSBARS (BOUNCE OFF TOP OF GOALS) ---
+            // Left Goal Top
+            if (ball.x < leftNet.width && Math.abs((ball.y + ball.radius) - leftNet.y) < 10 && ball.velocityY > 0) {
+                ball.y = leftNet.y - ball.radius;
+                ball.velocityY = -ball.velocityY * ball.bounce;
+            }
+            // Right Goal Top
+            if (ball.x > rightNet.x && Math.abs((ball.y + ball.radius) - rightNet.y) < 10 && ball.velocityY > 0) {
+                ball.y = rightNet.y - ball.radius;
+                ball.velocityY = -ball.velocityY * ball.bounce;
+            }
 
             // --- COLLISION: Player 1 hits Ball ---
             if (ball.x + ball.radius > player.x && ball.x - ball.radius < player.x + player.width &&
@@ -138,13 +149,12 @@
                 ball.velocityY = -8;
             }
 
-
-            // --- GOAL DETECTION ---
-            if (ball.x < leftNet.x + leftNet.width && ball.y > leftNet.y) {
+            // --- GOAL DETECTION (Must go UNDER the crossbar line now) ---
+            if (ball.x < leftNet.x + leftNet.width && ball.y > leftNet.y + 10) {
                 botScore++;
                 resetBall();
             }
-            if (ball.x > rightNet.x && ball.y > rightNet.y) {
+            if (ball.x > rightNet.x && ball.y > rightNet.y + 10) {
                 player1Score++;
                 resetBall();
             }
@@ -170,7 +180,7 @@
             ctx.fillStyle = "#ff4757";
             ctx.fillRect(player.x, player.y, player.width, player.height);
 
-            // Draw Bot (Blue)
+            // Draw Bot (Green)
             ctx.fillStyle = "#2ed573";
             ctx.fillRect(bot.x, bot.y, bot.width, bot.height);
 
