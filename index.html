@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>2D Ball Game with Crossbars</title>
+    <title>2D Ball Game - Menu Select</title>
     <style>
         body {
             background-color: #1a1a1a;
@@ -14,17 +14,57 @@
             color: white;
             font-family: sans-serif;
         }
+        .game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
         canvas {
             background-color: #87CEEB;
             border: 4px solid #ffffff;
             border-bottom: 20px solid #2e8b57;
         }
+        /* --- NEW MENU STYLES --- */
+        #startMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid white;
+            z-index: 10; /* Keeps menu on top */
+        }
+        button {
+            background-color: #2ed573;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            margin: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #26b360;
+        }
     </style>
 </head>
 <body>
 
-    <div>
-        <h2 id="scoreBoard" style="text-align: center; margin-bottom: 10px;">Score: 0 - 0</h2>
+    <div class="game-container">
+        <h2 id="scoreBoard" style="margin-bottom: 10px;">Score: 0 - 0</h2>
+        
+        <div id="startMenu">
+            <h2>Select Game Mode</h2>
+            <button onclick="startGame('bot')">1 Player (vs Bot)</button>
+            <button onclick="startGame('coop')">2 Players (Co-op)</button>
+        </div>
+
         <canvas id="gameCanvas" width="800" height="400"></canvas>
     </div>
 
@@ -36,16 +76,20 @@
         const groundLevel = 350;
 
         let player1Score = 0;
-        let botScore = 0;
+        let rightSideScore = 0; // Tracks score for either Bot or Player 2
 
-        const player = {
+        let gameActive = false; // Prevents things from moving before mode is selected
+        let gameMode = 'bot';   // 'bot' or 'coop'
+
+        const player1 = {
             x: 150, y: groundLevel, width: 40, height: 40,
             speed: 6, velocityY: 0, isJumping: false
         };
 
-        const bot = {
+        const rightSidePlayer = {
             x: 600, y: groundLevel, width: 40, height: 40,
-            speed: 4.5, velocityY: 0, isJumping: false
+            speed: 6, velocityY: 0, isJumping: false,
+            botSpeed: 4.5 // Original slower speed for the AI
         };
 
         const ball = {
@@ -59,105 +103,142 @@
         const leftNet = { x: 0, y: canvas.height - netHeight - 20, width: netWidth, height: netHeight };
         const rightNet = { x: canvas.width - netWidth, y: canvas.height - netHeight - 20, width: netWidth, height: netHeight };
 
-        const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false };
+        const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, a: false, d: false, w: false };
 
-        window.addEventListener("keydown", (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
-        window.addEventListener("keyup", (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+        window.addEventListener("keydown", (e) => { 
+            let key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            if (keys.hasOwnProperty(key)) keys[key] = true; 
+        });
+        window.addEventListener("keyup", (e) => { 
+            let key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            if (keys.hasOwnProperty(key)) keys[key] = false; 
+        });
+
+        // --- NEW START GAME FUNCTION ---
+        function startGame(selectedMode) {
+            gameMode = selectedMode;
+            document.getElementById("startMenu").style.display = "none"; // Hide menu
+            player1Score = 0;
+            rightSideScore = 0;
+            updateScoreBoard();
+            
+            // Reset positions
+            player1.x = 150;
+            rightSidePlayer.x = 600;
+            resetBall();
+
+            gameActive = true; // Unpauses the game
+        }
 
         function updatePhysics() {
-            // --- PLAYER 1 MOVEMENT ---
-            if (keys.ArrowLeft) player.x -= player.speed;
-            if (keys.ArrowRight) player.x += player.speed;
-            if (keys.ArrowUp && !player.isJumping) {
-                player.velocityY = -10;
-                player.isJumping = true;
+            if (!gameActive) return; // Freeze everything if menu is open
+
+            // --- PLAYER 1 MOVEMENT (A, D, W) ---
+            if (keys.a) player1.x -= player1.speed;
+            if (keys.d) player1.x += player1.speed;
+            if (keys.w && !player1.isJumping) {
+                player1.velocityY = -10;
+                player1.isJumping = true;
             }
-            player.velocityY += gravity;
-            player.y += player.velocityY;
-            if (player.y >= groundLevel) { player.y = groundLevel; player.velocityY = 0; player.isJumping = false; }
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+            player1.velocityY += gravity;
+            player1.y += player1.velocityY;
+            if (player1.y >= groundLevel) { player1.y = groundLevel; player1.velocityY = 0; player1.isJumping = false; }
+            if (player1.x < 0) player1.x = 0;
+            if (player1.x + player1.width > canvas.width) player1.x = canvas.width - player1.width;
 
-            // --- AI BOT INTELLIGENCE ---
-            if (ball.x > 350) {
-                if (bot.x + bot.width/2 < ball.x) bot.x += bot.speed;
-                else if (bot.x + bot.width/2 > ball.x) bot.x -= bot.speed;
-
-                if (ball.y < bot.y && Math.abs(bot.x - ball.x) < 80 && !bot.isJumping) {
-                    bot.velocityY = -10;
-                    bot.isJumping = true;
+            // --- RIGHT SIDE PLAYER (BOT OR CO-OP) ---
+            if (gameMode === 'coop') {
+                // Player 2 Movement (Arrow Keys)
+                if (keys.ArrowLeft) rightSidePlayer.x -= rightSidePlayer.speed;
+                if (keys.ArrowRight) rightSidePlayer.x += rightSidePlayer.speed;
+                if (keys.ArrowUp && !rightSidePlayer.isJumping) {
+                    rightSidePlayer.velocityY = -10;
+                    rightSidePlayer.isJumping = true;
                 }
             } else {
-                if (bot.x < 600) bot.x += bot.speed;
-                if (bot.x > 600) bot.x -= bot.speed;
+                // AI Bot Intelligence (Your original code)
+                if (ball.x > 350) {
+                    if (rightSidePlayer.x + rightSidePlayer.width/2 < ball.x) rightSidePlayer.x += rightSidePlayer.botSpeed;
+                    else if (rightSidePlayer.x + rightSidePlayer.width/2 > ball.x) rightSidePlayer.x -= rightSidePlayer.botSpeed;
+
+                    if (ball.y < rightSidePlayer.y && Math.abs(rightSidePlayer.x - ball.x) < 80 && !rightSidePlayer.isJumping) {
+                        rightSidePlayer.velocityY = -10;
+                        rightSidePlayer.isJumping = true;
+                    }
+                } else {
+                    if (rightSidePlayer.x < 600) rightSidePlayer.x += rightSidePlayer.botSpeed;
+                    if (rightSidePlayer.x > 600) rightSidePlayer.x -= rightSidePlayer.botSpeed;
+                }
             }
-            bot.velocityY += gravity;
-            bot.y += bot.velocityY;
-            if (bot.y >= groundLevel) { bot.y = groundLevel; bot.velocityY = 0; bot.isJumping = false; }
-            if (bot.x < 0) bot.x = 0;
-            if (bot.x + bot.width > canvas.width) bot.x = canvas.width - bot.width;
+            
+            // Apply Gravity/Boundaries to Right Side Player
+            rightSidePlayer.velocityY += gravity;
+            rightSidePlayer.y += rightSidePlayer.velocityY;
+            if (rightSidePlayer.y >= groundLevel) { rightSidePlayer.y = groundLevel; rightSidePlayer.velocityY = 0; rightSidePlayer.isJumping = false; }
+            if (rightSidePlayer.x < 0) rightSidePlayer.x = 0;
+            if (rightSidePlayer.x + rightSidePlayer.width > canvas.width) rightSidePlayer.x = canvas.width - rightSidePlayer.width;
 
             // --- BALL PHYSICS ---
             ball.velocityY += gravity * 0.8;
             ball.x += ball.velocityX;
             ball.y += ball.velocityY;
 
-            // Bounce Floor
             if (ball.y + ball.radius >= canvas.height - 20) {
                 ball.y = canvas.height - 20 - ball.radius;
                 ball.velocityY = -ball.velocityY * ball.bounce;
             }
-            // Bounce Top Ceiling
-           if (ball.y - ball.radius <= 0) {
-           ball.y = ball.radius; // Keep ball inside the screen
-           ball.velocityY = -ball.velocityY * ball.bounce; // Reverse speed to bounce down
-           }
-            // Bounce Side Walls (Fixed: Forces the ball out of the wall so it never freezes)
+            if (ball.y - ball.radius <= 0) {
+                ball.y = ball.radius; 
+                ball.velocityY = -ball.velocityY * ball.bounce; 
+            }
             if (ball.x - ball.radius <= 0) {
-                ball.x = ball.radius; // Force it out of the left wall
-                ball.velocityX = -ball.velocityX * ball.bounce; // Bounce!
+                ball.x = ball.radius; 
+                ball.velocityX = -ball.velocityX * ball.bounce; 
             }
             if (ball.x + ball.radius >= canvas.width) {
-                ball.x = canvas.width - ball.radius; // Force it out of the right wall
-                ball.velocityX = -ball.velocityX * ball.bounce; // Bounce!
+                ball.x = canvas.width - ball.radius; 
+                ball.velocityX = -ball.velocityX * ball.bounce; 
             }
             
-
-            // --- SOLID CROSSBARS (BOUNCE OFF TOP OF GOALS) ---
-            // Left Goal Top
+            // --- CROSSBARS ---
             if (ball.x < leftNet.width && Math.abs((ball.y + ball.radius) - leftNet.y) < 10 && ball.velocityY > 0) {
                 ball.y = leftNet.y - ball.radius;
                 ball.velocityY = -ball.velocityY * ball.bounce;
             }
-            // Right Goal Top
             if (ball.x > rightNet.x && Math.abs((ball.y + ball.radius) - rightNet.y) < 10 && ball.velocityY > 0) {
                 ball.y = rightNet.y - ball.radius;
                 ball.velocityY = -ball.velocityY * ball.bounce;
             }
 
-            // --- COLLISION: Player 1 hits Ball ---
-            if (ball.x + ball.radius > player.x && ball.x - ball.radius < player.x + player.width &&
-                ball.y + ball.radius > player.y && ball.y - ball.radius < player.y + player.height) {
-                ball.velocityX = (ball.x - (player.x + player.width/2)) * 0.4;
+            // --- COLLISIONS ---
+            if (ball.x + ball.radius > player1.x && ball.x - ball.radius < player1.x + player1.width &&
+                ball.y + ball.radius > player1.y && ball.y - ball.radius < player1.y + player1.height) {
+                ball.velocityX = (ball.x - (player1.x + player1.width/2)) * 0.4;
                 ball.velocityY = -8;
             }
 
-            // --- COLLISION: Bot hits Ball ---
-            if (ball.x + ball.radius > bot.x && ball.x - ball.radius < bot.x + bot.width &&
-                ball.y + ball.radius > bot.y && ball.y - ball.radius < bot.y + bot.height) {
-                ball.velocityX = (ball.x - (bot.x + bot.width/2)) * 0.4;
+            if (ball.x + ball.radius > rightSidePlayer.x && ball.x - ball.radius < rightSidePlayer.x + rightSidePlayer.width &&
+                ball.y + ball.radius > rightSidePlayer.y && ball.y - ball.radius < rightSidePlayer.y + rightSidePlayer.height) {
+                ball.velocityX = (ball.x - (rightSidePlayer.x + rightSidePlayer.width/2)) * 0.4;
                 ball.velocityY = -8;
             }
 
-            // --- GOAL DETECTION (Must go UNDER the crossbar line now) ---
+            // --- GOAL DETECTION ---
             if (ball.x < leftNet.x + leftNet.width && ball.y > leftNet.y + 10) {
-                botScore++;
+                rightSideScore++;
+                updateScoreBoard();
                 resetBall();
             }
             if (ball.x > rightNet.x && ball.y > rightNet.y + 10) {
                 player1Score++;
+                updateScoreBoard();
                 resetBall();
             }
+        }
+
+        function updateScoreBoard() {
+            let rightName = gameMode === 'coop' ? 'Player 2' : 'Bot';
+            document.getElementById("scoreBoard").innerText = `Player 1: ${player1Score}  -  ${rightName}: ${rightSideScore}`;
         }
 
         function resetBall() {
@@ -165,26 +246,24 @@
             ball.y = 150;
             ball.velocityX = (Math.random() > 0.5 ? 3 : -3);
             ball.velocityY = 0;
-            document.getElementById("scoreBoard").innerText = `Score: ${player1Score} - ${botScore}`;
         }
 
         function drawScreen() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Goals
             ctx.fillStyle = "white";
             ctx.fillRect(leftNet.x, leftNet.y, leftNet.width, leftNet.height);
             ctx.fillRect(rightNet.x, rightNet.y, rightNet.width, rightNet.height);
 
-            // Draw Player 1 (Red)
+            // Player 1 (Red)
             ctx.fillStyle = "#ff4757";
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
 
-            // Draw Bot (Green)
+            // Right Side Player (Green)
             ctx.fillStyle = "#2ed573";
-            ctx.fillRect(bot.x, bot.y, bot.width, bot.height);
+            ctx.fillRect(rightSidePlayer.x, rightSidePlayer.y, rightSidePlayer.width, rightSidePlayer.height);
 
-            // Draw Ball (Orange)
+            // Ball (Orange)
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
             ctx.fillStyle = "#ffa500";
@@ -198,6 +277,7 @@
             requestAnimationFrame(gameLoop);
         }
 
+        // The loop starts immediately, but updatePhysics() won't do anything until gameActive is true
         gameLoop();
     </script>
 </body>
